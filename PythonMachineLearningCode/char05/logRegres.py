@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 
 def loadDataSet():
@@ -28,7 +29,8 @@ def gradAscent(dataMatIn, classLabels):
     return weights
 
 def plotBestFit(wei):
-    weights = wei.getA()
+    # weights = wei.getA()
+    weights = wei
     dataMat, labelMat = loadDataSet()
     dataArr = np.array(dataMat)
     n = np.shape(dataArr)[0]
@@ -50,6 +52,8 @@ def plotBestFit(wei):
     plt.show()
 
 def stocGradAscent0(dataMatrix, classLabels):
+    dataMatrix = np.array(dataMatrix)
+    classLabels = np.array(classLabels)
     m, n = np.shape(dataMatrix)
     alpha = 0.01
     weights = np.ones(n)
@@ -59,9 +63,68 @@ def stocGradAscent0(dataMatrix, classLabels):
         weights = weights + alpha * error * dataMatrix[i]
     return weights
 
-dataArr, labelMat = loadDataSet()
+
+def stocGradAscent1(dataMatrix, classLabels, numIter=150):
+    dataMatrix = np.array(dataMatrix)
+    classLabels = np.array(classLabels)
+    m, n = np.shape(dataMatrix)
+    weights = np.ones(n)
+    for j in range(numIter):
+        dataIndex = list(range(m))
+        for i in range(m):
+            alpha = 4 / (1.0 + j + i) + 0.01
+            randIndex = int(random.uniform(0, len(dataIndex)))
+            h = sigmoid(sum(dataMatrix[randIndex] * weights))
+            error = classLabels[randIndex] - h
+            weights = weights + alpha * error * dataMatrix[randIndex]
+            del (dataIndex[randIndex])
+    return weights
+
+# dataArr, labelMat = loadDataSet()
 # print(dataArr)
 # print(labelMat)
 # print(gradAscent(dataArr, labelMat))
-wei =gradAscent(dataArr, labelMat)
-plotBestFit(wei)
+# wei =gradAscent(dataArr, labelMat)
+# wei =stocGradAscent1(dataArr, labelMat,4000)
+# plotBestFit(wei)
+
+
+def classifyVector(inX, weights):
+    prob = sigmoid(sum(inX * weights))
+    if prob > 0.5:
+        return 1.0
+    else:
+        return 0.0
+
+def colicTest():
+    frTrain = open('horseColicTraining.txt')
+    frTest = open('horseColicTest.txt')
+    trainingSet = []; trainingLabels = []
+    for line in frTrain.readlines():
+        currLine = line.strip().split('\t')
+        linearArr = []
+        for i in range(21):
+            linearArr.append(float(currLine[i]))
+        trainingSet.append(linearArr)
+        trainingLabels.append(float(currLine[21]))
+    trainWeights = stocGradAscent1(np.array(trainingSet), trainingLabels, 500)
+    errorCount = 0; numTestVec = 0.0
+    for line in frTest.readlines():
+        numTestVec += 1.0
+        currLine = line.strip().split('\t')
+        linearArr = []
+        for i in range(21):
+            linearArr.append(float(currLine[i]))
+        if int(classifyVector(np.array(linearArr), trainWeights)) != int(currLine[21]):
+            errorCount += 1
+    errorRate = (float(errorCount)/numTestVec)
+    print("the error rate of this test is: %f" % errorRate)
+    return errorRate
+
+def multiTest():
+    numTests = 10; errorSum = 0.0
+    for k in range(numTests):
+        errorSum += colicTest()
+    print("after %d iterations the average error rate is: %f" % (numTests, errorSum/float(numTests)))
+
+multiTest()
