@@ -81,19 +81,22 @@ def smoSimple(dataMatIn, classLabels, C, toler, maxIter):
 
 
 class optStruct:
-    def __init__(self, dataMatIn, classLabels, C, toler):
+    def __init__(self,dataMatIn, classLabels, C, toler, kTup):  # Initialize the structure with the parameters
         self.X = dataMatIn
         self.labelMat = classLabels
         self.C = C
         self.tol = toler
         self.m = np.shape(dataMatIn)[0]
-        self.alphas = np.mat(np.zeros((self.m, 1)))
+        self.alphas = np.asmatrix(np.zeros((self.m,1)))
         self.b = 0
-        self.eCache = np.mat(np.zeros((self.m, 2)))
+        self.eCache = np.asmatrix(np.zeros((self.m,2))) #first column is valid flag
+        self.K = np.asmatrix(np.zeros((self.m,self.m)))
+        for i in range(self.m):
+            self.K[:,i] = kernelTrans(self.X, self.X[i,:], kTup)
 
-def calcEk(os, k):
-    fXk = float(np.multiply(os.alphas, os.labelMat).T * (os.X * os.X[k, :].T)) + os.b
-    Ek = fXk - float(os.labelMat[k])
+def calcEk(oS, k):
+    fXk = float(np.multiply(oS.alphas,oS.labelMat).T*oS.K[:,k] + oS.b)
+    Ek = fXk - float(oS.labelMat[k])
     return Ek
 
 def selectJ(i, os, Ei):
@@ -103,51 +106,50 @@ def selectJ(i, os, Ei):
     if (len(validEcacheList) > 1):
         for k in validEcacheList:
             if k == i: continue
-            Ek = self.calcEk(os, k)
+            Ek = calcEk(os, k)
             deltaE = abs(Ei - Ek)
             if (deltaE > maxDeltaE):
                 maxK = k; maxDeltaE = deltaE; Ej = Ek
         return maxK, Ej
     else:
         j = selectJrand(i, os.m)
-        Ej = self.calcEk(os, j)
+        Ej = calcEk(os, j)
         return j, Ej
 
 def updateEk(os, k):
-    Ek = self.calcEk(os, k)
+    Ek = calcEk(os, k)
     os.eCache[k] = [1, Ek]
 
-def innerL(i, os):
-    Ei = calcEk(os, i)
-    if ((os.labelMat[i] * Ei < -os.tol) and (os.alphas[i] < os.C)) or \
-       ((os.labelMat[i] * Ei > os.tol) and (os.alphas[i] > 0)):
-        j, Ej = selectJ(i, os, Ei)
-        alphaIold = os.alphas[i].copy(); alphaJold = os.alphas[j].copy()
-        if (os.labelMat[i] != os.labelMat[j]):
-            L = max(0, os.alphas[j] - os.alphas[i])
-            H = min(os.C, os.C + os.alphas[j] - os.alphas[i])
+def innerL(i, oS):
+    Ei = calcEk(oS, i)
+    if ((oS.labelMat[i]*Ei < -oS.tol) and (oS.alphas[i] < oS.C)) or ((oS.labelMat[i]*Ei > oS.tol) and (oS.alphas[i] > 0)):
+        j,Ej = selectJ(i, oS, Ei) #this has been changed from selectJrand
+        alphaIold = oS.alphas[i].copy(); alphaJold = oS.alphas[j].copy();
+        if (oS.labelMat[i] != oS.labelMat[j]):
+            L = max(0, oS.alphas[j] - oS.alphas[i])
+            H = min(oS.C, oS.C + oS.alphas[j] - oS.alphas[i])
         else:
-            L = max(0, os.alphas[j] + os.alphas[i] - os.C)
-            H = min(os.C, os.alphas[j] + os.alphas[i])
-        if L == H: print("L==H"); return 0
-        eta = 2.0 * os.X[i, :] * os.X[j, :].T - os.X[i, :] * os.X[i, :].T - os.X[j, :] * os.X[j, :].T
+            L = max(0, oS.alphas[j] + oS.alphas[i] - oS.C)
+            H = min(oS.C, oS.alphas[j] + oS.alphas[i])
+        if L==H: print("L==H"); return 0
+        eta = 2.0 * oS.K[i,j] - oS.K[i,i] - oS.K[j,j] #changed for kernel
         if eta >= 0: print("eta>=0"); return 0
-        os.alphas[j] -= os.labelMat[j] * (Ei - Ej) / eta
-        os.alphas[j] = clipAlpha(os.alphas[j], H, L)
-        updateEk(os, j)
-        if (abs(os.alphas[j] - alphaJold) < 0.00001): print("j not moving enough"); return 0
-        os.alphas[i] += os.labelMat[j] * os.labelMat[i] * (alphaJold - os.alphas[j])
-        updateEk(os, i)
-        b1 = os.b - Ei - os.labelMat[i] * (os.alphas[i] - alphaIold) * os.X[i, :] * os.X[i, :].T - os.labelMat[j] * (os.alphas[j] - alphaJold) * os.X[i, :] * os.X[j, :].T
-        b2 = os.b - Ej - os.labelMat[i] * (os.alphas[i] - alphaIold) * os.X[i, :] * os.X[j, :].T - os.labelMat[j] * (os.alphas[j] - alphaJold) * os.X[j, :] * os.X[j, :].T
-        if (0 < os.alphas[i]) and (os.C > os.alphas[i]): os.b = b1
-        elif (0 < os.alphas[j]) and (os.C > os.alphas[j]): os.b = b2
-        else: os.b = (b1 + b2) / 2.0
+        oS.alphas[j] -= oS.labelMat[j]*(Ei - Ej)/eta
+        oS.alphas[j] = clipAlpha(oS.alphas[j],H,L)
+        updateEk(oS, j) #added this for the Ecache
+        if (abs(oS.alphas[j] - alphaJold) < 0.00001): print("j not moving enough"); return 0
+        oS.alphas[i] += oS.labelMat[j]*oS.labelMat[i]*(alphaJold - oS.alphas[j])#update i by the same amount as j
+        updateEk(oS, i) #added this for the Ecache                    #the update is in the oppostie direction
+        b1 = oS.b - Ei- oS.labelMat[i]*(oS.alphas[i]-alphaIold)*oS.K[i,i] - oS.labelMat[j]*(oS.alphas[j]-alphaJold)*oS.K[i,j]
+        b2 = oS.b - Ej- oS.labelMat[i]*(oS.alphas[i]-alphaIold)*oS.K[i,j]- oS.labelMat[j]*(oS.alphas[j]-alphaJold)*oS.K[j,j]
+        if (0 < oS.alphas[i]) and (oS.C > oS.alphas[i]): oS.b = b1
+        elif (0 < oS.alphas[j]) and (oS.C > oS.alphas[j]): oS.b = b2
+        else: oS.b = (b1 + b2)/2.0
         return 1
     else: return 0
 
 def smoP(dataMatIn, classLabels, C, toler, maxIter, kTup=('lin', 0)):
-    os = optStruct(np.mat(dataMatIn), np.mat(classLabels).transpose(), C, toler)
+    os = optStruct(np.asmatrix(dataMatIn), np.asmatrix(classLabels).transpose(), C, toler,kTup)
     iter = 0
     entireSet = True; alphaPairsChanged = 0
 
@@ -179,12 +181,103 @@ def calcWs(alphas, dataArr, classLabels):
         w += np.multiply(alphas[i] * labelMat[i], X[i, :].T)
     return w
 
-dataArr, labelMat = loadDataSet('testSet.txt')
-b,alphas = smoSimple(dataArr,labelMat,0.6,0.001,40)
+def kernelTrans(X, A, kTup): #calc the kernel or transform data to a higher dimensional space
+    m,n = np.shape(X)
+    K = np.asmatrix(np.zeros((m,1)))
+    if kTup[0]=='lin': K = X * A.T   #linear kernel
+    elif kTup[0]=='rbf':
+        for j in range(m):
+            deltaRow = X[j,:] - A
+            K[j] = deltaRow*deltaRow.T
+        K = np.exp(K/(-1*kTup[1]**2)) #divide in NumPy is element-wise not matrix like Matlab
+    else: raise NameError('Houston We Have a Problem -- \
+    That Kernel is not recognized')
+    return K
 
-ws = calcWs(alphas,dataArr,labelMat)
-print(ws)
+def testRbf(k1=1.3):
+    dataArr,labelArr = loadDataSet('testSetRBF.txt')
+    b,alphas = smoP(dataArr, labelArr, 200, 0.0001, 10000, ('rbf', k1)) #C=200 important
+    datMat=np.asmatrix(dataArr); labelMat = np.asmatrix(labelArr).transpose()
+    svInd=np.nonzero(alphas.A>0)[0]
+    sVs=datMat[svInd] #get matrix of only support vectors
+    labelSV = labelMat[svInd];
+    print("there are {%d} Support Vectors" ,np.shape(sVs)[0])
+    m,n = np.shape(datMat)
+    errorCount = 0
+    for i in range(m):
+        kernelEval = kernelTrans(sVs,datMat[i,:],('rbf', k1))
+        predict=kernelEval.T * np.multiply(labelSV,alphas[svInd]) + b
+        if np.sign(predict)!=np.sign(labelArr[i]): errorCount += 1
+    print("the training error rate is: " ,float(errorCount)/m)
+    dataArr,labelArr = loadDataSet('testSetRBF2.txt')
+    errorCount = 0
+    datMat=np.asmatrix(dataArr); labelMat = np.asmatrix(labelArr).transpose()
+    m,n = np.shape(datMat)
+    for i in range(m):
+        kernelEval = kernelTrans(sVs,datMat[i,:],('rbf', k1))
+        predict=kernelEval.T * np.multiply(labelSV,alphas[svInd]) + b
+        if np.sign(predict)!=np.sign(labelArr[i]): errorCount += 1
+    print("the test error rate is: ",float(errorCount)/m)
 
-dataMat = np.asmatrix(dataArr)
-for i in range(100):
-    print(dataMat[i] * np.asmatrix(ws) + b,labelMat[i])
+
+def img2vector(filename):
+    returnVect = np.zeros((1,1024))
+    fr = open(filename)
+    for i in range(32):
+        lineStr = fr.readline()
+        for j in range(32):
+            returnVect[0,32*i+j] = int(lineStr[j])
+    return returnVect
+
+def loadImages(dirName):
+    from os import listdir
+    hwLabels = []
+    trainingFileList = listdir(dirName)           #load the training set
+    m = len(trainingFileList)
+    trainingMat = np.zeros((m,1024))
+    for i in range(m):
+        fileNameStr = trainingFileList[i]
+        fileStr = fileNameStr.split('.')[0]     #take off .txt
+        classNumStr = int(fileStr.split('_')[0])
+        if classNumStr == 9: hwLabels.append(-1)
+        else: hwLabels.append(1)
+        trainingMat[i,:] = img2vector('%s/%s' % (dirName, fileNameStr))
+    return trainingMat, hwLabels
+
+def testDigits(kTup=('rbf', 10)):
+    dataArr,labelArr = loadImages('trainingDigits')
+    b,alphas = smoP(dataArr, labelArr, 200, 0.0001, 10000, kTup)
+    datMat=np.asmatrix(dataArr); labelMat = np.asmatrix(labelArr).transpose()
+    svInd=np.nonzero(alphas.A>0)[0]
+    sVs=datMat[svInd]
+    labelSV = labelMat[svInd];
+    print("there are {%d} Support Vectors" % np.shape(sVs)[0])
+    m,n = np.shape(datMat)
+    errorCount = 0
+    for i in range(m):
+        kernelEval = kernelTrans(sVs,datMat[i,:],kTup)
+        predict=kernelEval.T * np.multiply(labelSV,alphas[svInd]) + b
+        if np.sign(predict)!=np.sign(labelArr[i]): errorCount += 1
+    print("the training error rate is: %f" % (float(errorCount)/m))
+    dataArr,labelArr = loadImages('testDigits')
+    errorCount = 0
+    datMat=np.asmatrix(dataArr); labelMat = np.asmatrix(labelArr).transpose()
+    m,n = np.shape(datMat)
+    for i in range(m):
+        kernelEval = kernelTrans(sVs,datMat[i,:],kTup)
+        predict=kernelEval.T * np.multiply(labelSV,alphas[svInd]) + b
+        if np.sign(predict)!=np.sign(labelArr[i]): errorCount += 1
+    print("the test error rate is: %f" % (float(errorCount)/m) )
+
+testDigits()
+#testRbf()
+
+# dataArr, labelMat = loadDataSet('testSet.txt')
+# b,alphas = smoSimple(dataArr,labelMat,0.6,0.001,40)
+#
+# ws = calcWs(alphas,dataArr,labelMat)
+# print(ws)
+#
+# dataMat = np.asmatrix(dataArr)
+# for i in range(100):
+#     print(dataMat[i] * np.asmatrix(ws) + b,labelMat[i])
