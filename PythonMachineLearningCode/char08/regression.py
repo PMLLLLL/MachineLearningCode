@@ -112,8 +112,8 @@ def stageWise(xArr,yArr,eps=0.01,numIt=100):
                     lowestError = rssE
                     wsMax = wsTest
         ws = wsMax.copy()
-    #     returnMat[i,:]=ws.T
-    # return returnMat
+        returnMat[i,:]=ws.T
+    return returnMat
 
 #def scrapePage(inFile,outFile,yr,numPce,origPrc):
 #    from BeautifulSoup import BeautifulSoup

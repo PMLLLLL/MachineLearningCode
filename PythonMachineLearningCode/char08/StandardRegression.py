@@ -16,24 +16,24 @@ def loadDataSet(fileName):      #general function to parse tab -delimited floats
     return dataMat,labelMat
 
 # 标准回归计算
-def standRegres(xArr,yArr):
-    xMat = np.asmatrix(xArr); yMat = np.asmatrix(yArr).T
-    xTx = xMat.T*xMat
+def standRegres(xarr, yarr):
+    xmat = np.asmatrix(xarr); ymat = np.asmatrix(yarr).T
+    xTx = xmat.T * xmat
     if np.linalg.det(xTx) == 0.0:
         print("This matrix is singular, cannot do inverse")
         return
-    ws = xTx.I * (xMat.T*yMat)
+    ws = xTx.I * (xmat.T * ymat)
     return ws
 
 # 读取数据
 xArr,yArr = loadDataSet('ex0.txt')
-ws = standRegres(xArr,yArr)
+Ws = standRegres(xArr,yArr)
 
 # 将数据转换成矩阵
 xMat = np.asmatrix(xArr)
 yMat = np.asmatrix(yArr)
 
-print(ws)
+print(Ws)
 # 绘图
 fig = plt.figure()
 ax = fig.add_subplot(111)
@@ -41,7 +41,7 @@ ax = fig.add_subplot(111)
 ax.scatter(xMat[:,1].T.A, yMat.A,s=2,c='red')
 
 xCopy = xMat.copy()
-yHat = xCopy*ws #计算预测值
+yHat = xCopy*Ws #计算预测值
 ax.plot(xCopy[:,1],yHat,linewidth=1)
 plt.show()
 
